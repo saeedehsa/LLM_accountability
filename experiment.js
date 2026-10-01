@@ -110,19 +110,24 @@ const informasjon = {
   type: jsPsychHtmlButtonResponse,
   stimulus: `
     <div class="tekst">
-      <h2>Velkommen</h2>
-      <p>Takk for at du deltar i denne undersøkelsen om allmennkunnskap.</p>
-      <p>Du vil få <strong>47 spørsmål</strong>. For hvert spørsmål skal du:</p>
-      <ol>
-        <li>velge det svaret du tror er riktig, og</li>
-        <li>angi hvor sikker du er på svaret på en skala fra
-            1 (<em>ikke sikker i det hele tatt</em>) til 7 (<em>helt sikker</em>).</li>
-      </ol>
-      <p>Spørsmålene kommer i tilfeldig rekkefølge. Det tar omtrent 10&ndash;15 minutter.
-         Svarene dine behandles konfidensielt.</p>
-      <!-- RESEARCHER: replace the whole <div class="tekst"> above with the
-           information/consent wording from your Sikt/REK approval before you
-           collect data. Keep it in Norwegian. -->
+      <p>Takk for at du deltar i denne studien.</p>
+      <p>Du skal svare på <strong>47 spørsmål</strong> om allmennkunnskap.
+         Etter hvert spørsmål blir du bedt om å oppgi hvor sikker du er på at
+         svaret ditt er riktig.</p>
+      <p>Følg disse instruksjonene gjennom hele studien:</p>
+      <ul>
+        <li>Svar på hvert spørsmål ut fra din egen kunnskap.</li>
+        <li>Ikke bruk søkemotorer, KI-verktøy eller andre eksterne kilder for
+            å finne eller sjekke svar.</li>
+        <li>Hvis du ikke vet svaret, gjett så godt du kan i stedet for å slå
+            det opp.</li>
+        <li>Vurder hvert spørsmål for seg, uavhengig av de andre
+            spørsmålene.</li>
+      </ul>
+      <p>Lykke til!</p>
+      <!-- RESEARCHER: if your Sikt/REK approval requires specific
+           information/consent wording, add or adjust the text above before
+           you collect data. Keep it in Norwegian. -->
       <p>Trykk <strong>Start</strong> for å begynne.</p>
     </div>`,
   choices: ["Start"],
@@ -181,13 +186,20 @@ const bakgrunn = {
   survey_json: {
     showQuestionNumbers: "off",
     completeText: "Fullfør", // "Finish"
-    elements: BACKGROUND_QUESTIONS.map((q) => ({
-      type: "radiogroup",
-      name: q.name,
-      title: q.question,
-      choices: q.options,
-      isRequired: true,
-    })),
+    elements: [
+      {
+        type: "html",
+        // "Thank you for your time. Please answer the questions below about yourself."
+        html: "<p>Takk for at du tar deg tid. Vennligst svar på spørsmålene nedenfor om deg selv.</p>",
+      },
+      ...BACKGROUND_QUESTIONS.map((q) => ({
+        type: "radiogroup",
+        name: q.name,
+        title: q.question,
+        choices: q.options,
+        isRequired: true,
+      })),
+    ],
   },
   data: { task: "background" },
   on_finish: (d) => {
@@ -196,15 +208,18 @@ const bakgrunn = {
 };
 
 /* ----------------------------------------------------------------------------
- * 4. Build a clean summary alongside the raw jsPsych trial data
+ * 4. Shape the data for Proliferate's automatic CSV export
  * ----------------------------------------------------------------------------
- * Proliferate stores whatever object you pass to proliferate.submit(). We
- * send the raw per-trial jsPsych data (one row per page, incl. every
- * SurveyJS response) PLUS this compact summary for convenience. Row format
- * in `summary.r`:
- *   [ question.nr, chosen_option_index, correct(0/1), confidence, rt_ms ]
- * `chosen_option_index` points into the `options` list in questions.js
- * (-1 = not answered). See EXPAND_DATA.md.
+ * Proliferate turns each TOP-LEVEL key of the object passed to
+ * proliferate.submit() into its own CSV file:
+ *   - a key whose value is a LIST   -> one CSV, one row PER LIST ELEMENT
+ *   - a key whose value is an OBJECT -> one CSV, one row PER PARTICIPANT
+ * It also adds workerid / condition / error columns to every file.
+ * Nested objects/arrays INSIDE a list element are not a documented case, so
+ * every object below is kept flat (no nested objects/arrays) to get clean,
+ * ready-to-use columns straight out of the Proliferate "Download data" CSVs
+ * -> "<experiment>-knowledge.csv" and "<experiment>-participant.csv".
+ * See EXPAND_DATA.md.
  * --------------------------------------------------------------------------*/
 function originalIndex(nr, answerText) {
   const item = KNOWLEDGE_QUESTIONS.find((q) => q.nr === nr);
@@ -212,46 +227,43 @@ function originalIndex(nr, answerText) {
   return item.options.indexOf(answerText);
 }
 
-function buildSummary() {
+/* LIST -> "<experiment>-knowledge.csv", one row per question per participant. */
+function buildKnowledgeRows() {
   const trials = jsPsych.data.get().filter({ task: "knowledge" }).values();
-
-  const rows = trials.map((t) => ({
+  return trials.map((t) => ({
+    pid: PID,
     nr: t.item_nr,
-    q: t.question,
-    svar: t.chosen_answer,
-    svar_indeks: originalIndex(t.item_nr, t.chosen_answer),
-    fasit: t.correct_answer,
-    riktig: t.is_correct ? 1 : 0,
-    sikkerhet: t.confidence,
+    question: t.question,
+    chosen_answer: t.chosen_answer,
+    chosen_option_index: originalIndex(t.item_nr, t.chosen_answer),
+    correct_answer: t.correct_answer,
+    is_correct: t.is_correct ? 1 : 0,
+    confidence: t.confidence,
     rt_ms: Math.round(t.rt),
   }));
+}
 
-  const r = rows.map((k) => [
-    k.nr,
-    k.svar_indeks,
-    k.riktig,
-    k.sikkerhet,
-    k.rt_ms,
-  ]);
-
-  const order = rows.map((k) => k.nr);
-  const score = rows.reduce((s, k) => s + k.riktig, 0);
+/* OBJECT (flat) -> "<experiment>-participant.csv", one row per participant. */
+function buildParticipantRow(knowledgeRows) {
+  const order = knowledgeRows.map((k) => k.nr);
+  const score = knowledgeRows.reduce((s, k) => s + k.is_correct, 0);
   const bg =
     (jsPsych.data.get().filter({ task: "background" }).values()[0] || {})
       .background || {};
 
   return {
     pid: PID,
-    prolific: PROLIFIC,
+    prolific_pid: PROLIFIC.pid,
+    study_id: PROLIFIC.study_id,
+    session_id: PROLIFIC.session_id,
     start_time: START_ISO,
     end_time: new Date().toISOString(),
     user_agent: navigator.userAgent,
-    n_questions: rows.length,
+    n_questions: knowledgeRows.length,
     score: score,
-    presentation_order: order,
-    background: bg,
-    knowledge: rows,
-    r: r,
+    presentation_order: order.join(","), // kept as a string, not an array
+    morsmal_norsk: bg.morsmal_norsk || "",
+    utdanning_norge: bg.utdanning_norge || "",
   };
 }
 
@@ -264,10 +276,12 @@ function buildSummary() {
  * See README.md for the Proliferate/Prolific setup steps.
  * --------------------------------------------------------------------------*/
 function submitData() {
-  const summary = buildSummary();
+  const knowledge = buildKnowledgeRows();
+  const participant = buildParticipantRow(knowledge);
   const payload = {
-    trials: jsPsych.data.get().values(),
-    summary: summary,
+    knowledge: knowledge, // LIST -> knowledge.csv (one row per question)
+    participant: participant, // OBJECT -> participant.csv (one row per participant)
+    trials: jsPsych.data.get().values(), // LIST -> trials.csv, raw jsPsych backup
   };
 
   /* Local backup - helps if the submission to Proliferate fails. */
