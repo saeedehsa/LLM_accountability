@@ -1,0 +1,60 @@
+/* Simple styling for the survey. jsPsych and the survey plugin handle most of
+   it; this only tweaks the information / end pages. */
+
+.jspsych-content {
+  max-width: 760px;
+}
+
+/* Text block on the info / end pages */
+.tekst {
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: left;
+  line-height: 1.55;
+  font-size: 1.05rem;
+}
+
+.tekst h2 {
+  text-align: center;
+}
+
+.tekst ol,
+.tekst ul {
+  padding-left: 1.4em;
+}
+
+/* Primary button (Start / submit / return to Prolific) */
+.knapp,
+a.knapp {
+  display: inline-block;
+  padding: 0.7em 1.4em;
+  background: #1a5fb4;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.knapp:hover,
+a.knapp:hover {
+  background: #143f7a;
+}
+
+/* Secondary button (backup download) */
+.knapp-sekundaer {
+  display: inline-block;
+  padding: 0.6em 1.2em;
+  background: #fff;
+  color: #1a5fb4;
+  border: 1px solid #1a5fb4;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+/* A little more breathing room around the survey questions */
+.sd-question__title {
+  font-size: 1.1rem !important;
+}

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="nb">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Allmennkunnskapsundersøkelse</title>
+
+    <!-- jsPsych 8 -->
+    <script src="https://unpkg.com/jspsych@8.3.0"></script>
+    <link rel="stylesheet" href="https://unpkg.com/jspsych@8.3.0/css/jspsych.css" />
+
+    <!-- Plugins -->
+    <script src="https://unpkg.com/@jspsych/plugin-html-button-response@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-survey@4.0.0"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@jspsych/plugin-survey@4.0.0/css/survey.min.css" />
+
+    <link rel="stylesheet" href="style.css" />
+
+    <!-- Proliferate (needs jQuery) - submits data to Prolific/Proliferate -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://proliferate.alps.science/static/js/proliferate.js"></script>
+  </head>
+  <body>
+    <!-- Proliferate writes upload status here and redirects to Prolific on success -->
+    <div id="thanks"></div>
+
+    <!-- Content + logic. questions.js MUST load before experiment.js -->
+    <script src="questions.js"></script>
+    <script src="experiment.js"></script>
+  </body>
+</html>
