@@ -120,7 +120,7 @@ const informasjon = {
         <li>Ikke bruk søkemotorer, KI-verktøy eller andre eksterne kilder for
             å finne eller sjekke svar.</li>
         <li>Hvis du ikke vet svaret, gjett så godt du kan i stedet for å slå
-            det opp.</li>
+            opp svaret.</li>
         <li>Vurder hvert spørsmål for seg, uavhengig av de andre
             spørsmålene.</li>
       </ul>
