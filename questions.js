@@ -19,14 +19,12 @@
  * data.
  * ==========================================================================*/
 
-/* The 1-7 confidence rating shown under every knowledge question.
- * (Norwegian, participant-facing.) */
+/* The 0-100 confidence slider shown under every knowledge question, starting
+ * at 50. (Norwegian, participant-facing.) */
 const CONFIDENCE_SCALE = {
-  min: 1,
-  max: 7,
-  minLabel: "Ikke sikker i det hele tatt", // "Not sure at all"
-  maxLabel: "Helt sikker", // "Completely sure"
-  prompt: "Hvor sikker er du på svaret ditt?", // "How sure are you of your answer?"
+  min: 0,
+  max: 100,
+  prompt: "Hvor sikker er du på valget ditt?", // "How confident are you in your choice?"
 };
 
 /* The 47 general-knowledge questions.

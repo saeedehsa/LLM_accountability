@@ -3,7 +3,7 @@
  * ----------------------------------------------------------------------------
  * Flow:
  *   1. Information / consent page
- *   2. 47 knowledge pages (multiple choice + confidence 1-7) in RANDOM ORDER
+ *   2. 47 knowledge pages (multiple choice + confidence 0-100) in RANDOM ORDER
  *      - the order is unique per participant and is saved in the data
  *   3. 2 background questions (fixed order)
  *   4. Data is submitted to Proliferate in the background (no participant
@@ -134,33 +134,48 @@ const informasjon = {
   data: { task: "instructions" },
 };
 
-/* Build one knowledge page (multiple choice + confidence rating). */
+/* Build one knowledge page: multiple choice + confidence slider (0-100, starts at 50). */
 function buildKnowledgeTrial(item) {
+  const options = CONFIG.randomizeOptions
+    ? jsPsych.randomization.shuffle([...item.options])
+    : item.options;
+  const optionsHtml = options
+    .map(
+      (o) =>
+        `<label class="valg"><input type="radio" name="answer" value="${o}" required> ${o}</label>`
+    )
+    .join("");
+
+  const html = `
+    <fieldset class="sporsmal">
+      <legend>${item.question}</legend>
+      ${optionsHtml}
+    </fieldset>
+    <div class="sikkerhet">
+      <p class="sikkerhet-tittel">${CONFIDENCE_SCALE.prompt}</p>
+      <input type="range" name="confidence" min="${CONFIDENCE_SCALE.min}" max="${CONFIDENCE_SCALE.max}" step="1" value="50"
+        oninput="document.getElementById('sikkerhet-flyttet').value = '1';">
+      <div class="skala-ticks"><span>0</span><span>50</span><span>100</span></div>
+      <input type="hidden" name="confidence_moved" id="sikkerhet-flyttet" value="0">
+      <p id="sikkerhet-feil" class="feil" hidden>Flytt skyveren for å svare.</p>
+    </div>`;
+
   return {
-    type: jsPsychSurvey,
-    survey_json: {
-      showQuestionNumbers: "off",
-      completeText: "Neste →", // "Next"
-      elements: [
-        {
-          type: "radiogroup",
-          name: "answer",
-          title: item.question,
-          choices: item.options,
-          choicesOrder: CONFIG.randomizeOptions ? "random" : "none",
-          isRequired: true,
+    type: jsPsychSurveyHtmlForm,
+    html: html,
+    button_label: "Neste →",
+    on_load: () => {
+      const form = document.querySelector("form");
+      form.addEventListener(
+        "submit",
+        (e) => {
+          if (document.getElementById("sikkerhet-flyttet").value === "1") return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          document.getElementById("sikkerhet-feil").hidden = false;
         },
-        {
-          type: "rating",
-          name: "confidence",
-          title: CONFIDENCE_SCALE.prompt,
-          rateValues: [1, 2, 3, 4, 5, 6, 7],
-          minRateDescription: CONFIDENCE_SCALE.minLabel,
-          maxRateDescription: CONFIDENCE_SCALE.maxLabel,
-          displayMode: "buttons",
-          isRequired: true,
-        },
-      ],
+        true
+      );
     },
     data: {
       task: "knowledge",
@@ -171,7 +186,8 @@ function buildKnowledgeTrial(item) {
     on_finish: (d) => {
       const r = d.response || {};
       d.chosen_answer = r.answer;
-      d.confidence = r.confidence;
+      d.confidence = Number(r.confidence);
+      d.confidence_moved = r.confidence_moved === "1";
       d.is_correct = r.answer === d.correct_answer;
     },
   };
@@ -239,6 +255,7 @@ function buildKnowledgeRows() {
     correct_answer: t.correct_answer,
     is_correct: t.is_correct ? 1 : 0,
     confidence: t.confidence,
+    confidence_moved: t.confidence_moved ? 1 : 0,
     rt_ms: Math.round(t.rt),
   }));
 }

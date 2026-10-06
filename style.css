@@ -59,44 +59,66 @@ a.knapp:hover {
   font-size: 1.1rem !important;
 }
 
-/* Confidence scale: one row, min label left of button 1, max label right of
-   button 7. */
-.sd-rating fieldset[role="radiogroup"] {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-.sd-rating__item-text.sd-rating__min-text,
-.sd-rating__item-text.sd-rating__max-text {
-  position: static;
-  flex: 0 0 auto;
-  max-width: none;
-  margin: 0;
-  font-size: 0.85em;
-  line-height: 1.25;
-  white-space: nowrap;
-}
-
-.sd-rating__item-text.sd-rating__min-text {
-  text-align: right;
-  margin-right: 0.5rem;
-}
-
-.sd-rating__item-text.sd-rating__max-text {
+/* Knowledge page: multiple choice, then the 0-100 confidence slider */
+.sporsmal {
+  border: 1px solid #d7e0ea;
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  margin: 0 0 1.2rem;
+  font-size: 1.1rem;
   text-align: left;
 }
 
-.sd-rating__item {
-  min-width: 2.5rem;
-  height: 2.5rem;
+.sporsmal legend {
+  font-weight: 600;
+  padding: 0 0.3rem;
 }
 
-/* SurveyJS clips long labels with an ellipsis; undo that. */
-.sd-rating__item-text .sv-string-viewer {
-  white-space: inherit;
-  overflow: visible;
-  text-overflow: clip;
-  max-width: none;
+.valg {
+  display: block;
+  padding: 0.45rem 0;
+  cursor: pointer;
+}
+
+.sikkerhet {
+  border: 1px solid #d7e0ea;
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  text-align: left;
+}
+
+.sikkerhet-tittel {
+  font-weight: 600;
+  margin: 0 0 0.8rem;
+}
+
+.sikkerhet input[type="range"] {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+
+.skala-ticks {
+  position: relative;
+  height: 1.3em;
+  margin-top: 0.3rem;
+  font-size: 0.9em;
+  color: #5c6b7e;
+  font-variant-numeric: tabular-nums;
+}
+
+.skala-ticks span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+.skala-ticks span:nth-child(1) { left: 0; }
+.skala-ticks span:nth-child(2) { left: 50%; }
+.skala-ticks span:nth-child(3) { left: 100%; }
+
+.feil {
+  color: #b3331f;
+  font-size: 0.95rem;
+  margin: 0.6rem 0 0;
 }
