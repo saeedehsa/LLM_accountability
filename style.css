@@ -71,8 +71,8 @@ a.knapp:hover {
 .sd-rating__item-text.sd-rating__min-text,
 .sd-rating__item-text.sd-rating__max-text {
   position: static;
-  flex: 0 1 auto;
-  min-width: 0;
+  flex: 0 0 auto;
+  max-width: none;
   margin: 0;
   font-size: 0.85em;
   line-height: 1.25;
