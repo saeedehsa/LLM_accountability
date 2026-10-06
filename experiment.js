@@ -112,8 +112,7 @@ const informasjon = {
     <div class="tekst">
       <p>Takk for at du deltar i denne studien.</p>
       <p>Du skal svare på <strong>47 spørsmål</strong> om allmennkunnskap.
-         Etter hvert spørsmål blir du bedt om å oppgi hvor sikker du er på at
-         svaret ditt er riktig.</p>
+         Etter hvert spørsmål blir du bedt om å oppgi hvor sikker du er på svaret ditt.</p>
       <p>Følg disse instruksjonene gjennom hele studien:</p>
       <ul>
         <li>Svar på hvert spørsmål ut fra din egen kunnskap.</li>
