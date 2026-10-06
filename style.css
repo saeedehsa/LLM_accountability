@@ -58,3 +58,45 @@ a.knapp:hover {
 .sd-question__title {
   font-size: 1.1rem !important;
 }
+
+/* Confidence scale: one row, min label left of button 1, max label right of
+   button 7. */
+.sd-rating fieldset[role="radiogroup"] {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.sd-rating__item-text.sd-rating__min-text,
+.sd-rating__item-text.sd-rating__max-text {
+  position: static;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.85em;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.sd-rating__item-text.sd-rating__min-text {
+  text-align: right;
+  margin-right: 0.5rem;
+}
+
+.sd-rating__item-text.sd-rating__max-text {
+  text-align: left;
+}
+
+.sd-rating__item {
+  min-width: 2.5rem;
+  height: 2.5rem;
+}
+
+/* SurveyJS clips long labels with an ellipsis; undo that. */
+.sd-rating__item-text .sv-string-viewer {
+  white-space: inherit;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
+}
