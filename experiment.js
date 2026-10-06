@@ -134,7 +134,7 @@ const informasjon = {
   data: { task: "instructions" },
 };
 
-/* Build one knowledge page: multiple choice + confidence slider (0-100, starts at 50). */
+/* Build one knowledge page: multiple choice + confidence slider (0-100, starts at 0). */
 function buildKnowledgeTrial(item) {
   const options = CONFIG.randomizeOptions
     ? jsPsych.randomization.shuffle([...item.options])
@@ -142,7 +142,7 @@ function buildKnowledgeTrial(item) {
   const optionsHtml = options
     .map(
       (o) =>
-        `<label class="valg"><input type="radio" name="answer" value="${o}" required> ${o}</label>`
+        `<label class="valg"><input type="radio" name="answer" value="${o}" required oninvalid="this.setCustomValidity('Velg ett svar før du går videre.')" onchange="this.form.querySelectorAll('input[name=answer]').forEach((r) => r.setCustomValidity(''))"> ${o}</label>`
     )
     .join("");
 
@@ -153,7 +153,7 @@ function buildKnowledgeTrial(item) {
     </fieldset>
     <div class="sikkerhet">
       <p class="sikkerhet-tittel">${CONFIDENCE_SCALE.prompt}</p>
-      <input type="range" name="confidence" min="${CONFIDENCE_SCALE.min}" max="${CONFIDENCE_SCALE.max}" step="1" value="50"
+      <input type="range" name="confidence" min="${CONFIDENCE_SCALE.min}" max="${CONFIDENCE_SCALE.max}" step="1" value="0"
         oninput="document.getElementById('sikkerhet-flyttet').value = '1';">
       <div class="skala-ticks"><span>0</span><span>50</span><span>100</span></div>
       <input type="hidden" name="confidence_moved" id="sikkerhet-flyttet" value="0">
