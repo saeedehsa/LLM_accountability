@@ -98,6 +98,22 @@ a.knapp:hover {
   margin: 0;
 }
 
+.skala-wrap {
+  position: relative;
+  padding-top: 2.4rem;
+}
+
+.verdi-bobbel {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1a5fb4;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .skala-ticks {
   position: relative;
   height: 1.3em;

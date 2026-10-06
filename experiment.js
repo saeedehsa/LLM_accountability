@@ -133,6 +133,18 @@ const informasjon = {
   data: { task: "instructions" },
 };
 
+/* Marks the slider as touched (pointer, input, or arrow keys) and shows its value above the thumb. */
+function sikkerhetFlytt(el, e) {
+  const taster = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"];
+  if (e && e.type === "keydown" && !taster.includes(e.key)) return;
+  const v = Number(el.value);
+  const bobbel = document.getElementById("sikkerhet-verdi");
+  document.getElementById("sikkerhet-flyttet").value = "1";
+  bobbel.textContent = v;
+  bobbel.hidden = false;
+  bobbel.style.left = `calc(${v}% + ${8 - 0.16 * v}px)`;
+}
+
 /* Build one knowledge page: multiple choice + confidence slider (0-100, starts at 0). */
 function buildKnowledgeTrial(item) {
   const options = CONFIG.randomizeOptions
@@ -152,8 +164,11 @@ function buildKnowledgeTrial(item) {
     </fieldset>
     <div class="sikkerhet">
       <p class="sikkerhet-tittel">${CONFIDENCE_SCALE.prompt}</p>
-      <input type="range" name="confidence" min="${CONFIDENCE_SCALE.min}" max="${CONFIDENCE_SCALE.max}" step="1" value="0"
-        oninput="document.getElementById('sikkerhet-flyttet').value = '1';">
+      <div class="skala-wrap">
+        <output id="sikkerhet-verdi" class="verdi-bobbel" hidden>0</output>
+        <input type="range" name="confidence" min="${CONFIDENCE_SCALE.min}" max="${CONFIDENCE_SCALE.max}" step="1" value="0"
+          onpointerdown="sikkerhetFlytt(this, event)" oninput="sikkerhetFlytt(this, event)" onkeydown="sikkerhetFlytt(this, event)">
+      </div>
       <div class="skala-ticks"><span>0</span><span>50</span><span>100</span></div>
       <input type="hidden" name="confidence_moved" id="sikkerhet-flyttet" value="0">
       <p id="sikkerhet-feil" class="feil" hidden>Flytt skyveren for å svare.</p>
