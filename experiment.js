@@ -35,7 +35,7 @@ const CONFIG = {
 
   /* Minimum length of the "Hvorfor?" answer, in characters. Spaces inside
    * the text count; spaces at the very start/end do not. */
-  minExplanationChars: 20,
+  minExplanationChars: 30,
 };
 
 /* ----------------------------------------------------------------------------
@@ -177,13 +177,6 @@ function langNok(tekst) {
   return tekst.trim().length >= CONFIG.minExplanationChars;
 }
 
-/* Shows "n / 20 tegn" under the text box until the minimum is reached. */
-function oppdaterTeller(tekst) {
-  const n = tekst.trim().length;
-  document.getElementById("hvorfor-teller").textContent =
-    n < CONFIG.minExplanationChars ? `${n} / ${CONFIG.minExplanationChars} tegn` : "";
-}
-
 /* Builds one knowledge page: multiple choice, then "why?" text, then
  * confidence slider (0-100, starts at 0). Parts are revealed in turn and
  * stay visible when the participant comes back to the page.               */
@@ -205,7 +198,6 @@ function visSporsmal(rot, s, i) {
     <div id="hvorfor-del" class="hvorfor"${s.answer === null ? " hidden" : ""}>
       <label for="hvorfor" class="sikkerhet-tittel">Hvorfor?</label>
       <textarea id="hvorfor" rows="5"></textarea>
-      <p id="hvorfor-teller" class="teller"></p>
       <p id="hvorfor-feil" class="feil" hidden>Skriv minst ${CONFIG.minExplanationChars} tegn før du går videre.</p>
     </div>
     <div id="sikkerhet-del" class="sikkerhet"${!langNok(s.explanation) ? " hidden" : ""}>
@@ -224,7 +216,6 @@ function visSporsmal(rot, s, i) {
   const hvorfor = document.getElementById("hvorfor");
   const skyver = document.getElementById("sikkerhet");
   hvorfor.value = s.explanation; // set as a property, so no HTML escaping needed
-  oppdaterTeller(s.explanation);
 
   rot.querySelectorAll("input[name=answer]").forEach((r) =>
     r.addEventListener("change", () => {
@@ -235,7 +226,6 @@ function visSporsmal(rot, s, i) {
   );
   hvorfor.addEventListener("input", () => {
     s.explanation = hvorfor.value;
-    oppdaterTeller(s.explanation);
     if (langNok(s.explanation)) {
       document.getElementById("hvorfor-feil").hidden = true;
       document.getElementById("sikkerhet-del").hidden = false;
