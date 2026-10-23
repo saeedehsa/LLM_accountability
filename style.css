@@ -80,6 +80,27 @@ a.knapp:hover {
   cursor: pointer;
 }
 
+.hvorfor {
+  border: 1px solid #d7e0ea;
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  margin: 0 0 1.2rem;
+  text-align: left;
+}
+
+.hvorfor label {
+  display: block;
+}
+
+.hvorfor textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 0.5rem;
+  resize: vertical;
+}
+
 .sikkerhet {
   border: 1px solid #d7e0ea;
   border-radius: 8px;
@@ -100,19 +121,9 @@ a.knapp:hover {
 
 .skala-wrap {
   position: relative;
-  padding-top: 2.4rem;
+  padding-top: 0.4rem;
 }
 
-.verdi-bobbel {
-  position: absolute;
-  top: 0;
-  transform: translateX(-50%);
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #1a5fb4;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
 
 .skala-ticks {
   position: relative;

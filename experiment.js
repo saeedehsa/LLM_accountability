@@ -111,19 +111,13 @@ const informasjon = {
   stimulus: `
     <div class="tekst">
       <p>Takk for at du deltar i denne studien.</p>
-      <p>Du skal svare på <strong>47 spørsmål</strong> om allmennkunnskap.
-         Etter hvert spørsmål blir du bedt om å oppgi hvor sikker du er på svaret ditt.</p>
-      <p>Følg disse instruksjonene gjennom hele studien:</p>
-      <ul>
-        <li>Svar på hvert spørsmål ut fra din egen kunnskap.</li>
-        <li>Ikke bruk søkemotorer, KI-verktøy eller andre eksterne kilder for
-            å finne eller sjekke svar.</li>
-        <li>Hvis du ikke vet svaret, gjett så godt du kan i stedet for å slå
-            opp svaret.</li>
-        <li>Vurder hvert spørsmål for seg, uavhengig av de andre
-            spørsmålene.</li>
-      </ul>
-      <p>Lykke til!</p>
+      <p>Nedenfor skal du svare på noen spørsmål om allmennkunnskap. Noen er
+         ganske enkle, andre er vanskelige. Tenk deg at en venn har stilt deg
+         spørsmålet og skal bruke svaret ditt. Svar slik du naturlig ville gjort
+         i en samtale: bruk dine egne ord, forklar hvorfor du svarer som du gjør,
+         og få frem hvor mye vennen din kan stole på svaret. Gi ditt beste svar
+         selv om du ikke er helt sikker.
+         <strong>Svaret bør være kort, mellom to og seks setninger.</strong></p>
       <!-- RESEARCHER: if your Sikt/REK approval requires specific
            information/consent wording, add or adjust the text above before
            you collect data. Keep it in Norwegian. -->
@@ -133,19 +127,26 @@ const informasjon = {
   data: { task: "instructions" },
 };
 
-/* Marks the slider as touched (pointer, input, or arrow keys) and shows its value above the thumb. */
+/* Marks the slider as touched (pointer, input, or arrow keys). The value itself is not shown. */
 function sikkerhetFlytt(el, e) {
   const taster = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"];
   if (e && e.type === "keydown" && !taster.includes(e.key)) return;
-  const v = Number(el.value);
-  const bobbel = document.getElementById("sikkerhet-verdi");
   document.getElementById("sikkerhet-flyttet").value = "1";
-  bobbel.textContent = v;
-  bobbel.hidden = false;
-  bobbel.style.left = `calc(${v}% + ${8 - 0.16 * v}px)`;
 }
 
-/* Build one knowledge page: multiple choice + confidence slider (0-100, starts at 0). */
+/* Reveals the "why?" box once an answer is chosen, and the slider once the box has text. */
+function visNesteDel() {
+  const form = document.querySelector("form");
+  if (form.querySelector("input[name=answer]:checked")) {
+    document.getElementById("hvorfor-del").hidden = false;
+  }
+  if (document.getElementById("hvorfor").value.trim() !== "") {
+    document.getElementById("hvorfor-feil").hidden = true;
+    document.getElementById("sikkerhet-del").hidden = false;
+  }
+}
+
+/* Build one knowledge page: multiple choice, then "why?" text, then confidence slider (0-100, starts at 0). */
 function buildKnowledgeTrial(item) {
   const options = CONFIG.randomizeOptions
     ? jsPsych.randomization.shuffle([...item.options])
@@ -153,7 +154,7 @@ function buildKnowledgeTrial(item) {
   const optionsHtml = options
     .map(
       (o) =>
-        `<label class="valg"><input type="radio" name="answer" value="${o}" required oninvalid="this.setCustomValidity('Velg ett svar før du går videre.')" onchange="this.form.querySelectorAll('input[name=answer]').forEach((r) => r.setCustomValidity(''))"> ${o}</label>`
+        `<label class="valg"><input type="radio" name="answer" value="${o}" required oninvalid="this.setCustomValidity('Velg ett svar før du går videre.')" onchange="this.form.querySelectorAll('input[name=answer]').forEach((r) => r.setCustomValidity('')); visNesteDel()"> ${o}</label>`
     )
     .join("");
 
@@ -162,14 +163,18 @@ function buildKnowledgeTrial(item) {
       <legend>${item.question}</legend>
       ${optionsHtml}
     </fieldset>
-    <div class="sikkerhet">
+    <div id="hvorfor-del" class="hvorfor" hidden>
+      <label for="hvorfor" class="sikkerhet-tittel">Hvorfor?</label>
+      <textarea id="hvorfor" name="explanation" rows="5" oninput="visNesteDel()"></textarea>
+      <p id="hvorfor-feil" class="feil" hidden>Skriv en begrunnelse før du går videre.</p>
+    </div>
+    <div id="sikkerhet-del" class="sikkerhet" hidden>
       <p class="sikkerhet-tittel">${CONFIDENCE_SCALE.prompt}</p>
       <div class="skala-wrap">
-        <output id="sikkerhet-verdi" class="verdi-bobbel" hidden>0</output>
         <input type="range" name="confidence" min="${CONFIDENCE_SCALE.min}" max="${CONFIDENCE_SCALE.max}" step="1" value="0"
           onpointerdown="sikkerhetFlytt(this, event)" oninput="sikkerhetFlytt(this, event)" onkeydown="sikkerhetFlytt(this, event)">
       </div>
-      <div class="skala-ticks"><span>0</span><span>50</span><span>100</span></div>
+      <div class="skala-ticks"><span>0 %</span><span>50 %</span><span>100 %</span></div>
       <input type="hidden" name="confidence_moved" id="sikkerhet-flyttet" value="0">
       <p id="sikkerhet-feil" class="feil" hidden>Flytt skyveren for å svare.</p>
     </div>`;
@@ -183,10 +188,17 @@ function buildKnowledgeTrial(item) {
       form.addEventListener(
         "submit",
         (e) => {
-          if (document.getElementById("sikkerhet-flyttet").value === "1") return;
+          const harBegrunnelse = document.getElementById("hvorfor").value.trim() !== "";
+          const harFlyttet = document.getElementById("sikkerhet-flyttet").value === "1";
+          if (harBegrunnelse && harFlyttet) return;
           e.preventDefault();
           e.stopImmediatePropagation();
-          document.getElementById("sikkerhet-feil").hidden = false;
+          if (!harBegrunnelse) {
+            document.getElementById("hvorfor-feil").hidden = false;
+            document.getElementById("hvorfor").focus();
+          } else {
+            document.getElementById("sikkerhet-feil").hidden = false;
+          }
         },
         true
       );
@@ -200,6 +212,7 @@ function buildKnowledgeTrial(item) {
     on_finish: (d) => {
       const r = d.response || {};
       d.chosen_answer = r.answer;
+      d.explanation = (r.explanation || "").trim();
       d.confidence = Number(r.confidence);
       d.confidence_moved = r.confidence_moved === "1";
       d.is_correct = r.answer === d.correct_answer;
@@ -268,6 +281,7 @@ function buildKnowledgeRows() {
     chosen_option_index: originalIndex(t.item_nr, t.chosen_answer),
     correct_answer: t.correct_answer,
     is_correct: t.is_correct ? 1 : 0,
+    explanation: t.explanation,
     confidence: t.confidence,
     confidence_moved: t.confidence_moved ? 1 : 0,
     rt_ms: Math.round(t.rt),
