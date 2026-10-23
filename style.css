@@ -156,3 +156,11 @@ a.knapp:hover {
   justify-content: space-between;
   margin-top: 1.4rem;
 }
+
+/* Character counter under the "Hvorfor?" box */
+.teller {
+  color: #5c6b7e;
+  font-size: 0.9rem;
+  margin: 0.3rem 0 0;
+  min-height: 1.2em;
+}

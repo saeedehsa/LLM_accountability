@@ -32,6 +32,10 @@ const CONFIG = {
   /* Offer the participant a downloadable backup (JSON) if the submission to
    * Proliferate fails. */
   offerBackupDownload: true,
+
+  /* Minimum length of the "Hvorfor?" answer, in characters. Spaces inside
+   * the text count; spaces at the very start/end do not. */
+  minExplanationChars: 20,
 };
 
 /* ----------------------------------------------------------------------------
@@ -168,6 +172,18 @@ function visSide(i) {
   window.scrollTo(0, 0);
 }
 
+/* True when the "Hvorfor?" text is long enough. */
+function langNok(tekst) {
+  return tekst.trim().length >= CONFIG.minExplanationChars;
+}
+
+/* Shows "n / 20 tegn" under the text box until the minimum is reached. */
+function oppdaterTeller(tekst) {
+  const n = tekst.trim().length;
+  document.getElementById("hvorfor-teller").textContent =
+    n < CONFIG.minExplanationChars ? `${n} / ${CONFIG.minExplanationChars} tegn` : "";
+}
+
 /* Builds one knowledge page: multiple choice, then "why?" text, then
  * confidence slider (0-100, starts at 0). Parts are revealed in turn and
  * stay visible when the participant comes back to the page.               */
@@ -189,9 +205,10 @@ function visSporsmal(rot, s, i) {
     <div id="hvorfor-del" class="hvorfor"${s.answer === null ? " hidden" : ""}>
       <label for="hvorfor" class="sikkerhet-tittel">Hvorfor?</label>
       <textarea id="hvorfor" rows="5"></textarea>
-      <p id="hvorfor-feil" class="feil" hidden>Skriv en begrunnelse før du går videre.</p>
+      <p id="hvorfor-teller" class="teller"></p>
+      <p id="hvorfor-feil" class="feil" hidden>Skriv minst ${CONFIG.minExplanationChars} tegn før du går videre.</p>
     </div>
-    <div id="sikkerhet-del" class="sikkerhet"${s.explanation.trim() === "" ? " hidden" : ""}>
+    <div id="sikkerhet-del" class="sikkerhet"${!langNok(s.explanation) ? " hidden" : ""}>
       <p class="sikkerhet-tittel">${CONFIDENCE_SCALE.prompt}</p>
       <div class="skala-wrap">
         <input type="range" id="sikkerhet" min="${CONFIDENCE_SCALE.min}" max="${CONFIDENCE_SCALE.max}" step="1" value="${s.confidence}">
@@ -207,6 +224,7 @@ function visSporsmal(rot, s, i) {
   const hvorfor = document.getElementById("hvorfor");
   const skyver = document.getElementById("sikkerhet");
   hvorfor.value = s.explanation; // set as a property, so no HTML escaping needed
+  oppdaterTeller(s.explanation);
 
   rot.querySelectorAll("input[name=answer]").forEach((r) =>
     r.addEventListener("change", () => {
@@ -217,7 +235,8 @@ function visSporsmal(rot, s, i) {
   );
   hvorfor.addEventListener("input", () => {
     s.explanation = hvorfor.value;
-    if (s.explanation.trim() !== "") {
+    oppdaterTeller(s.explanation);
+    if (langNok(s.explanation)) {
       document.getElementById("hvorfor-feil").hidden = true;
       document.getElementById("sikkerhet-del").hidden = false;
     }
@@ -238,7 +257,7 @@ function visSporsmal(rot, s, i) {
     s.confidence = Number(skyver.value);
     if (s.answer === null) {
       document.getElementById("svar-feil").hidden = false;
-    } else if (s.explanation.trim() === "") {
+    } else if (!langNok(s.explanation)) {
       document.getElementById("hvorfor-feil").hidden = false;
       hvorfor.focus();
     } else if (!s.confidence_moved) {
