@@ -75,6 +75,7 @@ const START_ISO = new Date().toISOString();
 
 const jsPsych = initJsPsych({
   show_progress_bar: CONFIG.showProgressBar,
+  message_progress_bar: "Fremdrift", // "Progress"
   auto_update_progress_bar: false, // set by settFremdrift(), since the questions are one trial
   on_finish: submitData,
 });

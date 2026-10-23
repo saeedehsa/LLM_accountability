@@ -59,6 +59,12 @@ a.knapp:hover {
   font-size: 1.1rem !important;
 }
 
+/* Instructions + question pages: same width as the background page */
+#sider {
+  width: min(640px, calc(100vw - 32px));
+  margin: 0 auto;
+}
+
 /* Knowledge page: multiple choice, then the 0-100 confidence slider */
 .sporsmal {
   border: 1px solid #d7e0ea;
@@ -138,6 +144,7 @@ a.knapp:hover {
   position: absolute;
   top: 0;
   transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .skala-ticks span:nth-child(1) { left: 0; }
