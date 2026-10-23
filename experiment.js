@@ -3,7 +3,8 @@
  * ----------------------------------------------------------------------------
  * Flow:
  *   1. Information / consent page
- *   2. 47 knowledge pages (multiple choice + confidence 0-100) in RANDOM ORDER
+ *   2. 47 knowledge pages (choice + "Hvorfor?" + confidence 0-100 %) in RANDOM
+ *      ORDER, with Previous/Next navigation (steps 1-2 run as one jsPsych trial)
  *      - the order is unique per participant and is saved in the data
  *   3. 2 background questions (fixed order)
  *   4. Data is submitted to Proliferate in the background (no participant
@@ -70,7 +71,7 @@ const START_ISO = new Date().toISOString();
 
 const jsPsych = initJsPsych({
   show_progress_bar: CONFIG.showProgressBar,
-  auto_update_progress_bar: true,
+  auto_update_progress_bar: false, // set by settFremdrift(), since the questions are one trial
   on_finish: submitData,
 });
 
@@ -106,9 +107,7 @@ jsPsych.data.addProperties({
 
 /* Information / consent page. Participant-facing text is Norwegian.
  * REPLACE the body text with the wording from your Sikt/REK approval.        */
-const informasjon = {
-  type: jsPsychHtmlButtonResponse,
-  stimulus: `
+const INFORMASJON_HTML = `
     <div class="tekst">
       <p>Takk for at du deltar i denne studien.</p>
       <p>Nedenfor skal du svare på noen spørsmål om allmennkunnskap. Noen er
@@ -122,106 +121,144 @@ const informasjon = {
            information/consent wording, add or adjust the text above before
            you collect data. Keep it in Norwegian. -->
       <p>Trykk <strong>Start</strong> for å begynne.</p>
-    </div>`,
-  choices: ["Start"],
-  data: { task: "instructions" },
-};
+    </div>`;
 
-/* Marks the slider as touched (pointer, input, or arrow keys). The value itself is not shown. */
-function sikkerhetFlytt(el, e) {
-  const taster = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"];
-  if (e && e.type === "keydown" && !taster.includes(e.key)) return;
-  document.getElementById("sikkerhet-flyttet").value = "1";
-}
-
-/* Reveals the "why?" box once an answer is chosen, and the slider once the box has text. */
-function visNesteDel() {
-  const form = document.querySelector("form");
-  if (form.querySelector("input[name=answer]:checked")) {
-    document.getElementById("hvorfor-del").hidden = false;
-  }
-  if (document.getElementById("hvorfor").value.trim() !== "") {
-    document.getElementById("hvorfor-feil").hidden = true;
-    document.getElementById("sikkerhet-del").hidden = false;
-  }
-}
-
-/* Build one knowledge page: multiple choice, then "why?" text, then confidence slider (0-100, starts at 0). */
-function buildKnowledgeTrial(item) {
-  const options = CONFIG.randomizeOptions
+/* The instructions and all knowledge questions run as ONE jsPsych trial with
+ * its own Previous/Next navigation, so participants can go back and change
+ * earlier answers. Page 0 = instructions, page i (1..N) = SIDER[i - 1].
+ * Each entry keeps the participant's current answers for that question, in
+ * presentation order (random per participant, options shuffled once).       */
+const SIDER = jsPsych.randomization.shuffle([...KNOWLEDGE_QUESTIONS]).map((item) => ({
+  item: item,
+  options: CONFIG.randomizeOptions
     ? jsPsych.randomization.shuffle([...item.options])
-    : item.options;
-  const optionsHtml = options
+    : item.options,
+  answer: null,
+  explanation: "",
+  confidence: 0,
+  confidence_moved: false,
+  time_ms: 0, // total time spent on this page, summed over visits
+  visits: 0,
+}));
+
+let aktivSide = null;
+let sideStart = 0;
+
+function settFremdrift(i) {
+  if (CONFIG.showProgressBar && jsPsych.progressBar) {
+    jsPsych.progressBar.progress = i / (SIDER.length + 2);
+  }
+}
+
+/* Shows page i, after adding the time spent on the page being left. */
+function visSide(i) {
+  if (aktivSide > 0) SIDER[aktivSide - 1].time_ms += performance.now() - sideStart;
+  aktivSide = i;
+  sideStart = performance.now();
+  settFremdrift(i);
+
+  const rot = document.getElementById("sider");
+  if (i === 0) {
+    rot.innerHTML = `${INFORMASJON_HTML}
+      <div class="navigasjon"><span></span><button type="button" class="jspsych-btn" id="neste">Start</button></div>`;
+    document.getElementById("neste").addEventListener("click", () => visSide(1));
+  } else {
+    visSporsmal(rot, SIDER[i - 1], i);
+  }
+  window.scrollTo(0, 0);
+}
+
+/* Builds one knowledge page: multiple choice, then "why?" text, then
+ * confidence slider (0-100, starts at 0). Parts are revealed in turn and
+ * stay visible when the participant comes back to the page.               */
+function visSporsmal(rot, s, i) {
+  s.visits += 1;
+  const optionsHtml = s.options
     .map(
-      (o) =>
-        `<label class="valg"><input type="radio" name="answer" value="${o}" required oninvalid="this.setCustomValidity('Velg ett svar før du går videre.')" onchange="this.form.querySelectorAll('input[name=answer]').forEach((r) => r.setCustomValidity('')); visNesteDel()"> ${o}</label>`
+      (o, k) =>
+        `<label class="valg"><input type="radio" name="answer" value="${k}"${s.answer === o ? " checked" : ""}> ${o}</label>`
     )
     .join("");
 
-  const html = `
+  rot.innerHTML = `
     <fieldset class="sporsmal">
-      <legend>${item.question}</legend>
+      <legend>${s.item.question}</legend>
       ${optionsHtml}
+      <p id="svar-feil" class="feil" hidden>Velg ett svar før du går videre.</p>
     </fieldset>
-    <div id="hvorfor-del" class="hvorfor" hidden>
+    <div id="hvorfor-del" class="hvorfor"${s.answer === null ? " hidden" : ""}>
       <label for="hvorfor" class="sikkerhet-tittel">Hvorfor?</label>
-      <textarea id="hvorfor" name="explanation" rows="5" oninput="visNesteDel()"></textarea>
+      <textarea id="hvorfor" rows="5"></textarea>
       <p id="hvorfor-feil" class="feil" hidden>Skriv en begrunnelse før du går videre.</p>
     </div>
-    <div id="sikkerhet-del" class="sikkerhet" hidden>
+    <div id="sikkerhet-del" class="sikkerhet"${s.explanation.trim() === "" ? " hidden" : ""}>
       <p class="sikkerhet-tittel">${CONFIDENCE_SCALE.prompt}</p>
       <div class="skala-wrap">
-        <input type="range" name="confidence" min="${CONFIDENCE_SCALE.min}" max="${CONFIDENCE_SCALE.max}" step="1" value="0"
-          onpointerdown="sikkerhetFlytt(this, event)" oninput="sikkerhetFlytt(this, event)" onkeydown="sikkerhetFlytt(this, event)">
+        <input type="range" id="sikkerhet" min="${CONFIDENCE_SCALE.min}" max="${CONFIDENCE_SCALE.max}" step="1" value="${s.confidence}">
       </div>
       <div class="skala-ticks"><span>0 %</span><span>50 %</span><span>100 %</span></div>
-      <input type="hidden" name="confidence_moved" id="sikkerhet-flyttet" value="0">
       <p id="sikkerhet-feil" class="feil" hidden>Flytt skyveren for å svare.</p>
+    </div>
+    <div class="navigasjon">
+      <button type="button" class="jspsych-btn" id="forrige">← Forrige</button>
+      <button type="button" class="jspsych-btn" id="neste">${i === SIDER.length ? "Ferdig →" : "Neste →"}</button>
     </div>`;
 
-  return {
-    type: jsPsychSurveyHtmlForm,
-    html: html,
-    button_label: "Neste →",
-    on_load: () => {
-      const form = document.querySelector("form");
-      form.addEventListener(
-        "submit",
-        (e) => {
-          const harBegrunnelse = document.getElementById("hvorfor").value.trim() !== "";
-          const harFlyttet = document.getElementById("sikkerhet-flyttet").value === "1";
-          if (harBegrunnelse && harFlyttet) return;
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          if (!harBegrunnelse) {
-            document.getElementById("hvorfor-feil").hidden = false;
-            document.getElementById("hvorfor").focus();
-          } else {
-            document.getElementById("sikkerhet-feil").hidden = false;
-          }
-        },
-        true
-      );
-    },
-    data: {
-      task: "knowledge",
-      item_nr: item.nr,
-      question: item.question,
-      correct_answer: item.correct,
-    },
-    on_finish: (d) => {
-      const r = d.response || {};
-      d.chosen_answer = r.answer;
-      d.explanation = (r.explanation || "").trim();
-      d.confidence = Number(r.confidence);
-      d.confidence_moved = r.confidence_moved === "1";
-      d.is_correct = r.answer === d.correct_answer;
-    },
+  const hvorfor = document.getElementById("hvorfor");
+  const skyver = document.getElementById("sikkerhet");
+  hvorfor.value = s.explanation; // set as a property, so no HTML escaping needed
+
+  rot.querySelectorAll("input[name=answer]").forEach((r) =>
+    r.addEventListener("change", () => {
+      s.answer = s.options[Number(r.value)];
+      document.getElementById("svar-feil").hidden = true;
+      document.getElementById("hvorfor-del").hidden = false;
+    })
+  );
+  hvorfor.addEventListener("input", () => {
+    s.explanation = hvorfor.value;
+    if (s.explanation.trim() !== "") {
+      document.getElementById("hvorfor-feil").hidden = true;
+      document.getElementById("sikkerhet-del").hidden = false;
+    }
+  });
+  /* Marks the slider as touched (pointer, input, or arrow keys). The value itself is not shown. */
+  const taster = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"];
+  const flyttet = (e) => {
+    if (e.type === "keydown" && !taster.includes(e.key)) return;
+    s.confidence_moved = true;
+    s.confidence = Number(skyver.value);
+    document.getElementById("sikkerhet-feil").hidden = true;
   };
+  ["pointerdown", "input", "keydown"].forEach((t) => skyver.addEventListener(t, flyttet));
+  skyver.addEventListener("change", () => (s.confidence = Number(skyver.value)));
+
+  document.getElementById("forrige").addEventListener("click", () => visSide(i - 1));
+  document.getElementById("neste").addEventListener("click", () => {
+    s.confidence = Number(skyver.value);
+    if (s.answer === null) {
+      document.getElementById("svar-feil").hidden = false;
+    } else if (s.explanation.trim() === "") {
+      document.getElementById("hvorfor-feil").hidden = false;
+      hvorfor.focus();
+    } else if (!s.confidence_moved) {
+      document.getElementById("sikkerhet-feil").hidden = false;
+    } else if (i < SIDER.length) {
+      visSide(i + 1);
+    } else {
+      s.time_ms += performance.now() - sideStart;
+      jsPsych.finishTrial({ task: "knowledge_pages" });
+    }
+  });
 }
 
-let knowledgeTrials = KNOWLEDGE_QUESTIONS.map(buildKnowledgeTrial);
-knowledgeTrials = jsPsych.randomization.shuffle(knowledgeTrials);
+const sider = {
+  type: jsPsychHtmlButtonResponse,
+  stimulus: `<div id="sider"></div>`,
+  choices: [], // navigation buttons are drawn by visSide()
+  on_load: () => visSide(0),
+  data: { task: "knowledge_pages" },
+};
 
 /* Background questions (fixed order, one page). */
 const bakgrunn = {
@@ -245,6 +282,7 @@ const bakgrunn = {
     ],
   },
   data: { task: "background" },
+  on_start: () => settFremdrift(SIDER.length + 1),
   on_finish: (d) => {
     d.background = d.response;
   },
@@ -272,19 +310,19 @@ function originalIndex(nr, answerText) {
 
 /* LIST -> "<experiment>-knowledge.csv", one row per question per participant. */
 function buildKnowledgeRows() {
-  const trials = jsPsych.data.get().filter({ task: "knowledge" }).values();
-  return trials.map((t) => ({
+  return SIDER.map((s) => ({
     pid: PID,
-    nr: t.item_nr,
-    question: t.question,
-    chosen_answer: t.chosen_answer,
-    chosen_option_index: originalIndex(t.item_nr, t.chosen_answer),
-    correct_answer: t.correct_answer,
-    is_correct: t.is_correct ? 1 : 0,
-    explanation: t.explanation,
-    confidence: t.confidence,
-    confidence_moved: t.confidence_moved ? 1 : 0,
-    rt_ms: Math.round(t.rt),
+    nr: s.item.nr,
+    question: s.item.question,
+    chosen_answer: s.answer,
+    chosen_option_index: originalIndex(s.item.nr, s.answer),
+    correct_answer: s.item.correct,
+    is_correct: s.answer === s.item.correct ? 1 : 0,
+    explanation: s.explanation.trim(),
+    confidence: s.confidence,
+    confidence_moved: s.confidence_moved ? 1 : 0,
+    rt_ms: Math.round(s.time_ms), // total time on the page, summed over visits
+    n_visits: s.visits,
   }));
 }
 
@@ -384,5 +422,5 @@ function downloadBackup(payload) {
 /* ----------------------------------------------------------------------------
  * 6. Run
  * --------------------------------------------------------------------------*/
-const timeline = [informasjon, ...knowledgeTrials, bakgrunn];
+const timeline = [sider, bakgrunn];
 jsPsych.run(timeline);
