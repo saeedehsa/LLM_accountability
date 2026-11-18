@@ -2,10 +2,13 @@
  * experiment.js  —  General-knowledge survey (jsPsych 8 + Proliferate)
  * ----------------------------------------------------------------------------
  * Flow:
- *   1. Information / consent page
+ *   0. Consent page (EMPTY for now - Sikt-approved text goes in SAMTYKKE_HTML)
+ *   1. Instructions page
  *   2. 47 knowledge pages (choice + "Hvorfor?" + confidence 0-100 %) in RANDOM
  *      ORDER, with Previous/Next navigation (steps 1-2 run as one jsPsych trial)
  *      - the order is unique per participant and is saved in the data
+ *      - changing an answer resets that page's "Hvorfor?" text and slider;
+ *        the first complete response is saved next to the final one
  *   3. 2 background questions (fixed order)
  *   4. Data is submitted to Proliferate in the background (no participant
  *      action, no extra page) -> Proliferate redirects to Prolific
@@ -110,8 +113,23 @@ jsPsych.data.addProperties({
  * 3. Pages
  * --------------------------------------------------------------------------*/
 
-/* Information / consent page. Participant-facing text is Norwegian.
- * REPLACE the body text with the wording from your Sikt/REK approval.        */
+/* Consent page, shown before everything else. Left EMPTY on purpose: add the
+ * Sikt-approved information letter and consent wording here once the study is
+ * approved (in Norwegian), and change the button label if needed.            */
+const SAMTYKKE_HTML = `
+    <div class="tekst">
+      <!-- RESEARCHER: Sikt-approved information and consent text goes here. -->
+    </div>`;
+
+const samtykke = {
+  type: jsPsychHtmlButtonResponse,
+  stimulus: SAMTYKKE_HTML,
+  choices: ["Neste"], // "Next"
+  data: { task: "consent" },
+  on_start: () => settFremdrift(0),
+};
+
+/* Instructions page. Participant-facing text is Norwegian. */
 const INFORMASJON_HTML = `
     <div class="tekst">
       <p>Takk for at du deltar i denne studien.</p>
@@ -122,9 +140,8 @@ const INFORMASJON_HTML = `
          og få frem hvor mye vennen din kan stole på svaret. Gi ditt beste svar
          selv om du ikke er helt sikker.
          <strong>Svaret bør være kort, mellom to og seks setninger.</strong></p>
-      <!-- RESEARCHER: if your Sikt/REK approval requires specific
-           information/consent wording, add or adjust the text above before
-           you collect data. Keep it in Norwegian. -->
+      <p>Ikke bruk søkemotorer, KI-verktøy eller andre eksterne kilder for å
+         finne eller sjekke svar.</p>
       <p>Trykk <strong>Start</strong> for å begynne.</p>
     </div>`;
 
@@ -144,14 +161,94 @@ const SIDER = jsPsych.randomization.shuffle([...KNOWLEDGE_QUESTIONS]).map((item)
   confidence_moved: false,
   time_ms: 0, // total time spent on this page, summed over visits
   visits: 0,
+  paste_attempts: 0, // blocked paste/drop attempts in the "Hvorfor?" box
+  n_leaves: 0, // times the participant left the page (other tab/window/app)
+  n_tab_hidden: 0, // times the tab itself was hidden (tab switch, minimise)
+  time_away_ms: 0, // total time away while on this page (included in time_ms)
+  first: null, // first complete response {answer, explanation, confidence}, saved on the first Neste
+  n_answer_switches: 0, // times the chosen answer was switched to a different option
 }));
 
-let aktivSide = null;
+/* -1 = consent, 0 = instructions, 1..N = SIDER[i - 1],
+ * null = after the knowledge pages (background questions). */
+let aktivSide = -1;
 let sideStart = 0;
 
-function settFremdrift(i) {
+/* ----------------------------------------------------------------------------
+ * Tab-switch / focus tracking
+ * ----------------------------------------------------------------------------
+ * "Away" starts when the tab is hidden (tab switch, minimise) OR the window
+ * loses focus (e.g. clicking into another app or window placed side by side),
+ * and ends when the page is both visible and focused again. Counts and time
+ * away are attributed to the page shown when the participant left. Every raw
+ * event is also logged, with the page and time since the experiment started.
+ * --------------------------------------------------------------------------*/
+const FOKUS = {
+  events: [], // raw log -> "<experiment>-focus_events.csv"
+  away: false,
+  awayStart: 0,
+  awaySide: null, // page shown when the participant left
+  // totals outside the knowledge pages (instructions, background questions)
+  other: { n_leaves: 0, n_tab_hidden: 0, time_away_ms: 0 },
+};
+
+function sideEtikett(side) {
+  if (side === -1) return "consent";
+  if (side === 0) return "instructions";
+  if (side > 0) return String(SIDER[side - 1].item.nr);
+  return "background";
+}
+
+function fokusMal(side) {
+  return side > 0 ? SIDER[side - 1] : FOKUS.other;
+}
+
+function loggFokus(e) {
+  const t = performance.now();
+  const type = e.type === "visibilitychange" ? (document.hidden ? "hidden" : "visible") : e.type;
+  FOKUS.events.push({
+    pid: PID,
+    event: type,
+    page: sideEtikett(aktivSide),
+    t_ms: Math.round(t),
+  });
+  if (type === "hidden") fokusMal(aktivSide).n_tab_hidden += 1;
+
+  const borte = document.hidden || !document.hasFocus();
+  if (borte && !FOKUS.away) {
+    FOKUS.away = true;
+    FOKUS.awayStart = t;
+    FOKUS.awaySide = aktivSide;
+    fokusMal(aktivSide).n_leaves += 1;
+  } else if (!borte && FOKUS.away) {
+    avsluttBorte(t);
+  }
+}
+
+function avsluttBorte(t) {
+  if (!FOKUS.away) return;
+  FOKUS.away = false;
+  fokusMal(FOKUS.awaySide).time_away_ms += t - FOKUS.awayStart;
+}
+
+document.addEventListener("visibilitychange", loggFokus);
+window.addEventListener("blur", loggFokus);
+window.addEventListener("focus", loggFokus);
+
+/* Warn before the page is left (browser back button, closing the tab,
+ * reloading): leaving loses all answers. Removed just before submission, so
+ * the redirect to Prolific is not blocked. */
+function advarOmForlating(e) {
+  e.preventDefault();
+  e.returnValue = ""; // older browsers need this to show the warning
+}
+window.addEventListener("beforeunload", advarOmForlating);
+
+/* Progress steps: 0 = consent, 1 = instructions, 2..N+1 = knowledge pages,
+ * N+2 = background questions. */
+function settFremdrift(steg) {
   if (CONFIG.showProgressBar && jsPsych.progressBar) {
-    jsPsych.progressBar.progress = i / (SIDER.length + 2);
+    jsPsych.progressBar.progress = steg / (SIDER.length + 3);
   }
 }
 
@@ -160,7 +257,7 @@ function visSide(i) {
   if (aktivSide > 0) SIDER[aktivSide - 1].time_ms += performance.now() - sideStart;
   aktivSide = i;
   sideStart = performance.now();
-  settFremdrift(i);
+  settFremdrift(i + 1);
 
   const rot = document.getElementById("sider");
   if (i === 0) {
@@ -195,10 +292,12 @@ function visSporsmal(rot, s, i) {
       <legend>${s.item.question}</legend>
       ${optionsHtml}
       <p id="svar-feil" class="feil" hidden>Velg ett svar før du går videre.</p>
+      <p id="endret-info" class="info" hidden>Du har endret svaret ditt. Skriv på nytt hvorfor, og vurder hvor sikker du er.</p>
     </fieldset>
     <div id="hvorfor-del" class="hvorfor"${s.answer === null ? " hidden" : ""}>
       <label for="hvorfor" class="sikkerhet-tittel">Hvorfor?</label>
-      <textarea id="hvorfor" rows="5"></textarea>
+      <textarea id="hvorfor" rows="5" autocomplete="off"></textarea>
+      <p id="lim-feil" class="feil" hidden>Det er ikke mulig å lime inn tekst her. Skriv svaret med dine egne ord.</p>
       <p id="hvorfor-feil" class="feil" hidden>Skriv minst ${CONFIG.minExplanationChars} tegn før du går videre.</p>
     </div>
     <div id="sikkerhet-del" class="sikkerhet"${!langNok(s.explanation) ? " hidden" : ""}>
@@ -218,15 +317,56 @@ function visSporsmal(rot, s, i) {
   const skyver = document.getElementById("sikkerhet");
   hvorfor.value = s.explanation; // set as a property, so no HTML escaping needed
 
+  /* The question and answer options can't be copied: no text selection (see
+   * .sporsmal in style.css), and copy/cut, the right-click menu and dragging
+   * text out are blocked as well. Attempts are not recorded. */
+  const sporsmal = rot.querySelector(".sporsmal");
+  ["copy", "cut", "contextmenu", "dragstart", "selectstart"].forEach((t) =>
+    sporsmal.addEventListener(t, (e) => e.preventDefault())
+  );
+
+  /* Switching to a different answer clears the "Hvorfor?" text and resets the
+   * slider, so the explanation and confidence always belong to the final
+   * answer. (The first complete response is kept separately in s.first.) */
   rot.querySelectorAll("input[name=answer]").forEach((r) =>
     r.addEventListener("change", () => {
-      s.answer = s.options[Number(r.value)];
+      const nytt = s.options[Number(r.value)];
+      if (s.answer !== null && nytt !== s.answer) {
+        s.n_answer_switches += 1;
+        if (s.explanation !== "" || s.confidence_moved) {
+          s.explanation = "";
+          s.confidence = 0;
+          s.confidence_moved = false;
+          hvorfor.value = "";
+          skyver.value = 0;
+          document.getElementById("sikkerhet-del").hidden = true;
+          document.getElementById("hvorfor-feil").hidden = true;
+          document.getElementById("sikkerhet-feil").hidden = true;
+          document.getElementById("endret-info").hidden = false;
+        }
+      }
+      s.answer = nytt;
       document.getElementById("svar-feil").hidden = true;
       document.getElementById("hvorfor-del").hidden = false;
     })
   );
+  /* No pasting or drag-and-drop into the "Hvorfor?" box (keyboard shortcut,
+   * right-click menu, or dragging text in). Attempts are counted. */
+  const blokkerLiming = (e) => {
+    e.preventDefault();
+    s.paste_attempts += 1;
+    document.getElementById("lim-feil").hidden = false;
+  };
+  hvorfor.addEventListener("paste", blokkerLiming);
+  hvorfor.addEventListener("drop", blokkerLiming);
+  hvorfor.addEventListener("beforeinput", (e) => {
+    if (["insertFromPaste", "insertFromPasteAsQuotation", "insertFromDrop"].includes(e.inputType)) {
+      blokkerLiming(e);
+    }
+  });
   hvorfor.addEventListener("input", () => {
     s.explanation = hvorfor.value;
+    document.getElementById("lim-feil").hidden = true;
     if (langNok(s.explanation)) {
       document.getElementById("hvorfor-feil").hidden = true;
       document.getElementById("sikkerhet-del").hidden = false;
@@ -253,13 +393,27 @@ function visSporsmal(rot, s, i) {
       hvorfor.focus();
     } else if (!s.confidence_moved) {
       document.getElementById("sikkerhet-feil").hidden = false;
-    } else if (i < SIDER.length) {
+    } else {
+      if (s.first === null) {
+        s.first = {
+          answer: s.answer,
+          explanation: s.explanation.trim(),
+          confidence: s.confidence,
+        };
+      }
+      gaaVidere();
+    }
+  });
+
+  function gaaVidere() {
+    if (i < SIDER.length) {
       visSide(i + 1);
     } else {
       s.time_ms += performance.now() - sideStart;
+      aktivSide = null; // focus events from here on count as "background"
       jsPsych.finishTrial({ task: "knowledge_pages" });
     }
-  });
+  }
 }
 
 const sider = {
@@ -292,7 +446,7 @@ const bakgrunn = {
     ],
   },
   data: { task: "background" },
-  on_start: () => settFremdrift(SIDER.length + 1),
+  on_start: () => settFremdrift(SIDER.length + 2),
   on_finish: (d) => {
     d.background = d.response;
   },
@@ -320,26 +474,43 @@ function originalIndex(nr, answerText) {
 
 /* LIST -> "<experiment>-knowledge.csv", one row per question per participant. */
 function buildKnowledgeRows() {
-  return SIDER.map((s) => ({
-    pid: PID,
-    nr: s.item.nr,
-    question: s.item.question,
-    chosen_answer: s.answer,
-    chosen_option_index: originalIndex(s.item.nr, s.answer),
-    correct_answer: s.item.correct,
-    is_correct: s.answer === s.item.correct ? 1 : 0,
-    explanation: s.explanation.trim(),
-    confidence: s.confidence,
-    confidence_moved: s.confidence_moved ? 1 : 0,
-    rt_ms: Math.round(s.time_ms), // total time on the page, summed over visits
-    n_visits: s.visits,
-  }));
+  return SIDER.map((s) => {
+    const f = s.first || { answer: s.answer, explanation: s.explanation.trim(), confidence: s.confidence };
+    return {
+      pid: PID,
+      nr: s.item.nr,
+      question: s.item.question,
+      chosen_answer: s.answer,
+      chosen_option_index: originalIndex(s.item.nr, s.answer),
+      correct_answer: s.item.correct,
+      is_correct: s.answer === s.item.correct ? 1 : 0,
+      explanation: s.explanation.trim(),
+      confidence: s.confidence,
+      confidence_moved: s.confidence_moved ? 1 : 0,
+      rt_ms: Math.round(s.time_ms), // total time on the page, summed over visits
+      n_visits: s.visits,
+      paste_attempts: s.paste_attempts,
+      n_leaves: s.n_leaves,
+      n_tab_hidden: s.n_tab_hidden,
+      time_away_ms: Math.round(s.time_away_ms),
+      // first complete response (when Neste was first pressed on this page)
+      first_answer: f.answer,
+      first_is_correct: f.answer === s.item.correct ? 1 : 0,
+      first_explanation: f.explanation,
+      first_confidence: f.confidence,
+      answer_changed: f.answer !== s.answer ? 1 : 0,
+      explanation_changed: f.explanation !== s.explanation.trim() ? 1 : 0,
+      confidence_changed: f.confidence !== s.confidence ? 1 : 0,
+      n_answer_switches: s.n_answer_switches, // includes switches before the first Neste
+    };
+  });
 }
 
 /* OBJECT (flat) -> "<experiment>-participant.csv", one row per participant. */
 function buildParticipantRow(knowledgeRows) {
   const order = knowledgeRows.map((k) => k.nr);
   const score = knowledgeRows.reduce((s, k) => s + k.is_correct, 0);
+  const sum = (key) => knowledgeRows.reduce((s, k) => s + k[key], 0);
   const bg =
     (jsPsych.data.get().filter({ task: "background" }).values()[0] || {})
       .background || {};
@@ -355,6 +526,17 @@ function buildParticipantRow(knowledgeRows) {
     n_questions: knowledgeRows.length,
     score: score,
     presentation_order: order.join(","), // kept as a string, not an array
+    paste_attempts_total: sum("paste_attempts"),
+    n_answers_changed: sum("answer_changed"), // questions whose final answer differs from the first
+    first_score: sum("first_is_correct"),
+    // knowledge pages only
+    n_leaves_questions: sum("n_leaves"),
+    n_tab_hidden_questions: sum("n_tab_hidden"),
+    time_away_ms_questions: sum("time_away_ms"),
+    // instructions + background questions
+    n_leaves_other: FOKUS.other.n_leaves,
+    n_tab_hidden_other: FOKUS.other.n_tab_hidden,
+    time_away_ms_other: Math.round(FOKUS.other.time_away_ms),
     morsmal_norsk: bg.morsmal_norsk || "",
     utdanning_norge: bg.utdanning_norge || "",
   };
@@ -369,11 +551,14 @@ function buildParticipantRow(knowledgeRows) {
  * See README.md for the Proliferate/Prolific setup steps.
  * --------------------------------------------------------------------------*/
 function submitData() {
+  window.removeEventListener("beforeunload", advarOmForlating); // let Proliferate redirect
+  avsluttBorte(performance.now()); // close an away period still open at the end
   const knowledge = buildKnowledgeRows();
   const participant = buildParticipantRow(knowledge);
   const payload = {
     knowledge: knowledge, // LIST -> knowledge.csv (one row per question)
     participant: participant, // OBJECT -> participant.csv (one row per participant)
+    focus_events: FOKUS.events, // LIST -> focus_events.csv (one row per event)
     trials: jsPsych.data.get().values(), // LIST -> trials.csv, raw jsPsych backup
   };
 
@@ -432,5 +617,5 @@ function downloadBackup(payload) {
 /* ----------------------------------------------------------------------------
  * 6. Run
  * --------------------------------------------------------------------------*/
-const timeline = [sider, bakgrunn];
+const timeline = [samtykke, sider, bakgrunn];
 jsPsych.run(timeline);

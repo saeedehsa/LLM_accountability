@@ -73,6 +73,10 @@ a.knapp:hover {
   margin: 0 0 1.2rem;
   font-size: 1.1rem;
   text-align: left;
+  /* question + options can't be selected (and so can't be copied) */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .sporsmal legend {
@@ -162,4 +166,11 @@ a.knapp:hover {
   display: flex;
   justify-content: space-between;
   margin-top: 1.4rem;
+}
+
+/* Notice shown when the participant switches to a different answer */
+.info {
+  color: #1a5fb4;
+  font-size: 0.95rem;
+  margin: 0.6rem 0 0;
 }
