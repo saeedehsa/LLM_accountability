@@ -167,6 +167,7 @@ const SIDER = jsPsych.randomization.shuffle([...KNOWLEDGE_QUESTIONS]).map((item)
   time_away_ms: 0, // total time away while on this page (included in time_ms)
   first: null, // first complete response {answer, explanation, confidence}, saved on the first Neste
   n_answer_switches: 0, // times the chosen answer was switched to a different option
+  n_undo: 0, // times "Angre" was used to bring back the previous answer after a switch
 }));
 
 /* -1 = consent, 0 = instructions, 1..N = SIDER[i - 1],
@@ -292,7 +293,8 @@ function visSporsmal(rot, s, i) {
       <legend>${s.item.question}</legend>
       ${optionsHtml}
       <p id="svar-feil" class="feil" hidden>Velg ett svar før du går videre.</p>
-      <p id="endret-info" class="info" hidden>Du har endret svaret ditt. Skriv på nytt hvorfor, og vurder hvor sikker du er.</p>
+      <p id="endret-info" class="info" hidden>Du har endret svaret ditt. Skriv på nytt hvorfor, og vurder hvor sikker du er.
+        <button type="button" id="angre" class="lenke-knapp">Angre</button></p>
     </fieldset>
     <div id="hvorfor-del" class="hvorfor"${s.answer === null ? " hidden" : ""}>
       <label for="hvorfor" class="sikkerhet-tittel">Hvorfor?</label>
@@ -327,13 +329,23 @@ function visSporsmal(rot, s, i) {
 
   /* Switching to a different answer clears the "Hvorfor?" text and resets the
    * slider, so the explanation and confidence always belong to the final
-   * answer. (The first complete response is kept separately in s.first.) */
+   * answer. (The first complete response is kept separately in s.first.)
+   * The cleared state is kept in `angre`, so the "Angre" (undo) button can
+   * bring back the previous answer, text and slider after an accidental click.
+   * It stays available until the participant leaves the page. */
+  let angre = null;
   rot.querySelectorAll("input[name=answer]").forEach((r) =>
     r.addEventListener("change", () => {
       const nytt = s.options[Number(r.value)];
       if (s.answer !== null && nytt !== s.answer) {
         s.n_answer_switches += 1;
         if (s.explanation !== "" || s.confidence_moved) {
+          angre = {
+            answer: s.answer,
+            explanation: s.explanation,
+            confidence: s.confidence,
+            confidence_moved: s.confidence_moved,
+          };
           s.explanation = "";
           s.confidence = 0;
           s.confidence_moved = false;
@@ -350,6 +362,21 @@ function visSporsmal(rot, s, i) {
       document.getElementById("hvorfor-del").hidden = false;
     })
   );
+  document.getElementById("angre").addEventListener("click", () => {
+    if (!angre) return;
+    Object.assign(s, angre);
+    s.n_undo += 1;
+    angre = null;
+    rot.querySelectorAll("input[name=answer]").forEach((r) => {
+      r.checked = s.options[Number(r.value)] === s.answer;
+    });
+    hvorfor.value = s.explanation;
+    skyver.value = s.confidence;
+    document.getElementById("sikkerhet-del").hidden = !langNok(s.explanation);
+    ["endret-info", "hvorfor-feil", "sikkerhet-feil", "lim-feil"].forEach(
+      (id) => (document.getElementById(id).hidden = true)
+    );
+  });
   /* No pasting or drag-and-drop into the "Hvorfor?" box (keyboard shortcut,
    * right-click menu, or dragging text in). Attempts are counted. */
   const blokkerLiming = (e) => {
@@ -502,6 +529,7 @@ function buildKnowledgeRows() {
       explanation_changed: f.explanation !== s.explanation.trim() ? 1 : 0,
       confidence_changed: f.confidence !== s.confidence ? 1 : 0,
       n_answer_switches: s.n_answer_switches, // includes switches before the first Neste
+      n_undo: s.n_undo, // switches taken back with "Angre"
     };
   });
 }
@@ -529,6 +557,7 @@ function buildParticipantRow(knowledgeRows) {
     paste_attempts_total: sum("paste_attempts"),
     n_answers_changed: sum("answer_changed"), // questions whose final answer differs from the first
     first_score: sum("first_is_correct"),
+    n_undo_total: sum("n_undo"),
     // knowledge pages only
     n_leaves_questions: sum("n_leaves"),
     n_tab_hidden_questions: sum("n_tab_hidden"),
